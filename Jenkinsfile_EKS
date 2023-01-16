@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+    
+    tools{
+        maven 'Maven_3.6.3' 
+    }
+    
+    environment{
+        registry = "public.ecr.aws/q4o3m7g1/ecr-img-springboot"
+    }
+
+    stages {
+        stage('Checkout Git') {
+            steps {
+                checkout scmGit(branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/PatilChetana/AWS-EKS-ECR-springboot-app.git']])
+            }
+        }
+        
+        stage('Build Jar'){
+            steps{
+                sh 'mvn -version'
+                sh 'mvn clean install'
+                
+            }
+        }
+        
+        stage('Build Image'){
+            steps{
+                script{
+                    docker.build registry
+                }
+            }
+        }
+        
+        stage('Push into ECR'){
+            steps{
+                sh 'aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/q4o3m7g1'
+                sh 'docker push public.ecr.aws/q4o3m7g1/ecr-img-springboot:latest'
+            }
+        }
+        
+        stage('K8s Deploy : EKS'){
+            steps{
+                script{
+                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'AWS_EKS-ubuntu-secret', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                        sh 'kubectl apply -f eks-deploy-k8s.yaml'
+                    }
+                }
+            }
+        }
+        
+        
+        
+        
+    }
+}
